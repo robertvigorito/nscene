@@ -1,13 +1,13 @@
 [project]
 name = "nscene"
 version = "0.1.0"
-description = "Add your description here"
+description = "PySide6 Nuke scene open and save browser"
 readme = "README.md"
 authors = [
     { name = "Rob", email = "robertvigorito@gmail.com" }
 ]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = ["PySide6>=6.8.1"]
 
 [project.scripts]
 nscene = "nscene:main"
