@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 _SCENE_NAME = re.compile(
     r"^(?P<name>.+?)_v(?P<version>\d{3})_m(?P<minor>\d{2})(?:_(?P<description>.*?))?\.nk$",
@@ -60,8 +61,8 @@ class SceneRepository:
                     version=int(match.group("version")),
                     minor=int(match.group("minor")),
                     description=match.group("description") or "",
-                    created=datetime.fromtimestamp(stat.st_ctime),
-                    modified=datetime.fromtimestamp(stat.st_mtime),
+                    created=datetime.fromtimestamp(stat.st_ctime, UTC),
+                    modified=datetime.fromtimestamp(stat.st_mtime, UTC),
                 )
             )
         return sorted(records, key=lambda item: (item.version, item.minor), reverse=True)
@@ -131,10 +132,12 @@ class MongoSceneRepository(SceneRepository):
             path = Path(document["path"])
             stat = path.stat() if path.is_file() else None
             created = document.get("created") or (
-                datetime.fromtimestamp(stat.st_ctime) if stat else datetime.min
+                datetime.fromtimestamp(stat.st_ctime, UTC) if stat else datetime.min.replace(
+                    tzinfo=UTC
+                )
             )
             modified = document.get("modified") or (
-                datetime.fromtimestamp(stat.st_mtime) if stat else created
+                datetime.fromtimestamp(stat.st_mtime, UTC) if stat else created
             )
             records.append(
                 SceneRecord(
@@ -156,7 +159,7 @@ class MongoSceneRepository(SceneRepository):
         match = _SCENE_NAME.match(path.name)
         if not match:
             raise ValueError(f"Not a versioned Nuke scene path: {path.name}")
-        modified = datetime.fromtimestamp(path.stat().st_mtime)
+        modified = datetime.fromtimestamp(path.stat().st_mtime, UTC)
         self._collection.update_one(
             {"path": str(path)},
             {"$set": {
@@ -169,7 +172,7 @@ class MongoSceneRepository(SceneRepository):
                 "version": int(match.group("version")),
                 "minor": int(match.group("minor")),
                 "description": match.group("description") or "",
-                "created": created or datetime.fromtimestamp(path.stat().st_ctime),
+                "created": created or datetime.fromtimestamp(path.stat().st_ctime, UTC),
                 "modified": modified,
             }},
             upsert=True,

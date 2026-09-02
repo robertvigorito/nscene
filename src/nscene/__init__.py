@@ -1,6 +1,11 @@
 """Nuke scene open/save browser."""
 
-from .scene_manager import MongoSceneRepository, NukeAdapter, SceneRecord, SceneRepository
+from .scene_manager import (
+    MongoSceneRepository,
+    NukeAdapter,
+    SceneRecord,
+    SceneRepository,
+)
 
 __all__ = ["MongoSceneRepository", "NukeAdapter", "SceneRecord", "SceneRepository", "main"]
 

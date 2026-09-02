@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from PySide6 import QtWidgets
 
-from .scene_manager import MongoSceneRepository, NukeAdapter, SceneRecord, SceneRepository
+from .scene_manager import (
+    MongoSceneRepository,
+    NukeAdapter,
+    SceneRecord,
+    SceneRepository,
+)
 
 
 class SceneFields(QtWidgets.QFormLayout):
