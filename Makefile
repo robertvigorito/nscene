@@ -1,5 +1,5 @@
 
-package=nuix
+package=nscene
 
 clean: clean-build clean-pyc clean-test ## remove all build, test, coverage and Python artifacts
 
@@ -58,6 +58,15 @@ lint-check: lint check
 
 install: clean
 	pip install --upgrade .
+
+uv-install: clean
+	uv sync
+
+uv-run:
+	uv run nscene
+
+rez-run:
+	rez-env nscene -- nscene
 
 poetry-install: clean
 	poetry install 
