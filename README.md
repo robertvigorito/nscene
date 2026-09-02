@@ -6,14 +6,19 @@ PySide6 dialogs for saving and opening Nuke scenes using a configurable
 ```python
 from nscene.ui import show_open, show_save_as
 
-show_open("/show/scenes")
-show_save_as("/show/scenes")
+show_open("/show/scenes", mongo_uri="mongodb://localhost:27017")
+show_save_as("/show/scenes", mongo_uri="mongodb://localhost:27017")
 ```
 
 The open dialog lists matching `.nk` files with name, padded version (`v###.##`),
 creation date, and modification date. It supports opening the selected script or
 pasting it into the current Nuke group. The save dialog creates missing folders
 and writes padded versioned filenames with an optional description.
+
+When `mongo_uri` is supplied, MongoDB stores and indexes the project, sequence,
+shot, type, scene path, version, description, and timestamps. The files remain
+on the filesystem; MongoDB is the searchable scene metadata backend. The
+`nscene` command reads `NSCENE_MONGO_URI` and `NSCENE_SCENE_ROOT`.
 
 ## Installation
 

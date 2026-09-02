@@ -7,7 +7,7 @@ authors = [
     { name = "Rob", email = "robertvigorito@gmail.com" }
 ]
 requires-python = ">=3.12"
-dependencies = ["PySide6>=6.8.1"]
+dependencies = ["PySide6>=6.8.1", "pymongo>=4.15.3"]
 
 [project.scripts]
 nscene = "nscene:main"

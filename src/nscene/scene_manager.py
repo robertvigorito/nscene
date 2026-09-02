@@ -89,6 +89,92 @@ class SceneRepository:
             f"{name}_v{version:03d}_m{minor:02d}{suffix}.nk"
         )
 
+    def record_scene(
+        self, project: str, sequence: str, shot: str, scene_type: str,
+        path: Path, created: datetime | None = None,
+    ) -> None:
+        """Hook for repositories that persist scene metadata."""
+
+
+class MongoSceneRepository(SceneRepository):
+    """MongoDB metadata index backed by the same scene path convention."""
+
+    def __init__(
+        self,
+        root: str | Path,
+        uri: str,
+        database: str = "nscene",
+        collection: str = "scenes",
+    ) -> None:
+        super().__init__(root)
+        try:
+            from pymongo import MongoClient
+        except ImportError as exc:
+            raise RuntimeError("PyMongo is required for the MongoDB backend") from exc
+        self._client = MongoClient(uri, serverSelectionTimeoutMS=3000)
+        self._collection = self._client[database][collection]
+        self._collection.create_index(
+            [("project", 1), ("sequence", 1), ("shot", 1), ("scene_type", 1)]
+        )
+
+    def list_scenes(
+        self, project: str, sequence: str, shot: str, scene_type: str
+    ) -> list[SceneRecord]:
+        records: list[SceneRecord] = []
+        query = {
+            "project": project,
+            "sequence": sequence,
+            "shot": shot,
+            "scene_type": scene_type,
+        }
+        for document in self._collection.find(query):
+            path = Path(document["path"])
+            stat = path.stat() if path.is_file() else None
+            created = document.get("created") or (
+                datetime.fromtimestamp(stat.st_ctime) if stat else datetime.min
+            )
+            modified = document.get("modified") or (
+                datetime.fromtimestamp(stat.st_mtime) if stat else created
+            )
+            records.append(
+                SceneRecord(
+                    path=path,
+                    name=document["name"],
+                    version=int(document["version"]),
+                    minor=int(document["minor"]),
+                    description=document.get("description", ""),
+                    created=created,
+                    modified=modified,
+                )
+            )
+        return sorted(records, key=lambda item: (item.version, item.minor), reverse=True)
+
+    def record_scene(
+        self, project: str, sequence: str, shot: str, scene_type: str,
+        path: Path, created: datetime | None = None,
+    ) -> None:
+        match = _SCENE_NAME.match(path.name)
+        if not match:
+            raise ValueError(f"Not a versioned Nuke scene path: {path.name}")
+        modified = datetime.fromtimestamp(path.stat().st_mtime)
+        self._collection.update_one(
+            {"path": str(path)},
+            {"$set": {
+                "project": project,
+                "sequence": sequence,
+                "shot": shot,
+                "scene_type": scene_type,
+                "path": str(path),
+                "name": match.group("name"),
+                "version": int(match.group("version")),
+                "minor": int(match.group("minor")),
+                "description": match.group("description") or "",
+                "created": created or datetime.fromtimestamp(path.stat().st_ctime),
+                "modified": modified,
+            }},
+            upsert=True,
+        )
+
 
 class NukeAdapter:
     """Small adapter that keeps the UI testable outside a running Nuke session."""

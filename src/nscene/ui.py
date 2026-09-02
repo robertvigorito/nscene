@@ -7,7 +7,7 @@ from typing import Callable
 
 from PySide6 import QtWidgets
 
-from .scene_manager import NukeAdapter, SceneRecord, SceneRepository
+from .scene_manager import MongoSceneRepository, NukeAdapter, SceneRecord, SceneRepository
 
 
 class SceneFields(QtWidgets.QFormLayout):
@@ -76,6 +76,9 @@ class SaveAsDialog(QtWidgets.QDialog):
                 description=self.description.text(),
             )
             self.nuke.save_as(path)
+            self.repository.record_scene(
+                data["project"], data["sequence"], data["shot"], data["scene_type"], path
+            )
         except (OSError, ValueError, RuntimeError) as exc:
             QtWidgets.QMessageBox.warning(self, "Unable to save scene", str(exc))
             return
@@ -149,9 +152,19 @@ class OpenDialog(QtWidgets.QDialog):
         self._run(self.nuke.copy_to_group)
 
 
-def show_save_as(root: str | Path, parent: QtWidgets.QWidget | None = None) -> int:
-    return SaveAsDialog(SceneRepository(root), NukeAdapter()).exec()
+def _repository(root: str | Path, mongo_uri: str | None) -> SceneRepository:
+    if mongo_uri:
+        return MongoSceneRepository(root, mongo_uri)
+    return SceneRepository(root)
 
 
-def show_open(root: str | Path, parent: QtWidgets.QWidget | None = None) -> int:
-    return OpenDialog(SceneRepository(root), NukeAdapter()).exec()
+def show_save_as(
+    root: str | Path, parent: QtWidgets.QWidget | None = None, mongo_uri: str | None = None
+) -> int:
+    return SaveAsDialog(_repository(root, mongo_uri), NukeAdapter()).exec()
+
+
+def show_open(
+    root: str | Path, parent: QtWidgets.QWidget | None = None, mongo_uri: str | None = None
+) -> int:
+    return OpenDialog(_repository(root, mongo_uri), NukeAdapter()).exec()
