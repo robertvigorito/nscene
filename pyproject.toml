@@ -1,13 +1,18 @@
 [project]
 name = "nscene"
-version = "0.1.0"
+version = "0.2.0b1"
 description = "Add your description here"
 readme = "README.md"
 authors = [
     { name = "Rob", email = "robertvigorito@gmail.com" }
 ]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "necessities",
+    "pyside6>=6.10.1",
+    "qt-py>=2.0.7",
+    "qtpy>=2.4.3",
+]
 
 [project.scripts]
 nscene = "nscene:main"
@@ -15,3 +20,12 @@ nscene = "nscene:main"
 [build-system]
 requires = ["uv_build>=0.9.11,<0.10.0"]
 build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.14.10",
+    "types-nuke>=13.2.8.0",
+]
+
+[tool.uv.sources]
+necessities = { path = "../necessities" }
