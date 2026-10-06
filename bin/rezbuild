@@ -1,4 +1,5 @@
-"""Rez build script using uv for package installation."""
+#!/usr/bin/env python3
+"""Build the nscene Rez package using uv."""
 
 import os
 import shutil
@@ -28,7 +29,7 @@ def build() -> None:
         str(target_path),
     ]
     subprocess.run(cmd, cwd=source_path, check=True)
-    # Copy nuke in the source directory to the target path
+
     nuke_source = source_path / "src/nuke"
     shutil.copytree(nuke_source, install_path / "nuke", dirs_exist_ok=True)
 

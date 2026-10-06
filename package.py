@@ -41,7 +41,7 @@ authors = []
 requires = ["python", "nuke", "Qt.py", "necessities"]
 private_build_requires = []
 
-build_command = "python {root}/rezbuild.py"
+build_command = "{root}/bin/rezbuild"
 
 
 def commands():

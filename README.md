@@ -18,7 +18,7 @@ From this repository root:
 rez-build -i
 ```
 
-This uses `package.py` and runs `rezbuild.py`, which executes:
+This uses `package.py` and runs `bin/rezbuild`, which executes:
 
 ```bash
 uv pip install . --no-deps --target <rez_install_root>/python
