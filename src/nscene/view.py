@@ -1,6 +1,6 @@
 """Build a Nuke save and open interface."""
 
-from Qt import QtWidgets
+from PySide6 import QtCore, QtWidgets
 
 from necessities import assemble
 
@@ -21,10 +21,17 @@ class NSaveView(QtWidgets.QDialog):
 
         super().__init__(parent)
 
-        self.scene_assembler = assemble.Scene.from_application("nuke")
+        self.scene_assembler = assemble.Scene.from_application("nuke", root="/vfx/wgid/projects")
+        self.settings = QtCore.QSettings("nscene", "save-as")
 
-        self.project_level_edit = QtWidgets.QLineEdit()
-        self.project_level_edit.setPlaceholderText("Project Level, show, sequence and shot seperated by .")
+        self.project_edit = QtWidgets.QLineEdit()
+        self.project_edit.setPlaceholderText("Project")
+
+        self.sequence_edit = QtWidgets.QLineEdit()
+        self.sequence_edit.setPlaceholderText("Sequence")
+
+        self.shot_edit = QtWidgets.QLineEdit()
+        self.shot_edit.setPlaceholderText("Shot")
 
         # description layout
         self.description_edit = QtWidgets.QLineEdit()
@@ -33,11 +40,36 @@ class NSaveView(QtWidgets.QDialog):
         # Version layout
         self.version_edit = QtWidgets.QLineEdit()
         self.version_edit.setPlaceholderText("Supports versioning with 001, 002 or v001.01")
+        self.version_edit.installEventFilter(self)
 
         # Preview panel
-        self.preview_panel = QtWidgets.QLabel()
-        self.preview_panel.setContentsMargins(0, 0, 0, 0)
-        # self.preview_panel.setStyleSheet("border-right: 10px double ; margin: 0;")
+        self.preview_panel = QtWidgets.QLineEdit()
+        self.preview_panel.setReadOnly(True)
+        self.preview_panel.setPlaceholderText("The scene save path will appear here")
+
+        self.script_model = QtWidgets.QFileSystemModel(self)
+        self.script_model.setFilter(QtCore.QDir.Filter.Files | QtCore.QDir.Filter.NoDotAndDotDot)
+        self.script_model.setNameFilters(["*.nk"])
+        self.script_model.setNameFilterDisables(False)
+
+        self.script_tree = QtWidgets.QTreeView()
+        self.script_tree.setModel(self.script_model)
+        self.script_tree.setRootIsDecorated(False)
+        self.script_tree.setSortingEnabled(True)
+        self.script_tree.sortByColumn(3, QtCore.Qt.SortOrder.DescendingOrder)
+        self.script_tree.setMinimumHeight(180)
+
+        for name, widget in (
+            ("project", self.project_edit),
+            ("sequence", self.sequence_edit),
+            ("shot", self.shot_edit),
+            ("description", self.description_edit),
+            ("version", self.version_edit),
+        ):
+            value = self.settings.value(name, "", str)
+            if name != "version":
+                value = self.normalize_text(value)
+            widget.setText(value)
 
         # Save layout
         self.save_button = QtWidgets.QPushButton("Save")
@@ -51,18 +83,92 @@ class NSaveView(QtWidgets.QDialog):
         button_layout.addWidget(self.save_button)
         button_layout.addWidget(self.cancel_button)
 
+        context_layout = QtWidgets.QHBoxLayout()
+        context_layout.addWidget(self.project_edit)
+        context_layout.addWidget(QtWidgets.QLabel("/"))
+        context_layout.addWidget(self.sequence_edit)
+        context_layout.addWidget(QtWidgets.QLabel("/"))
+        context_layout.addWidget(self.shot_edit)
+
         layout = QtWidgets.QFormLayout(self)
-        layout.addRow("Context", self.project_level_edit)
+        layout.addRow("Context", context_layout)
         layout.addRow("Description", self.description_edit)
         layout.addRow("Version", self.version_edit)
-        layout.addRow(None, self.preview_panel)
+        layout.addRow("Save path", self.preview_panel)
+        layout.addRow("Existing scripts", self.script_tree)
 
         layout.addRow(button_layout)
 
         self.setLayout(layout)
 
-        for m in (self.project_level_edit, self.description_edit, self.version_edit):
+        for m in (
+            self.project_edit,
+            self.sequence_edit,
+            self.shot_edit,
+            self.description_edit,
+            self.version_edit,
+        ):
             m.textChanged.connect(self.form_path)
+            m.textChanged.connect(self.save_settings)
+        for m in (self.project_edit, self.sequence_edit, self.shot_edit, self.description_edit):
+            m.textEdited.connect(self.normalize_text_edit)
+        self.form_path()
+
+    @staticmethod
+    def normalize_text(value):
+        """Convert path text to lowercase underscore-separated text."""
+        return value.replace(" ", "_").lower()
+
+    def normalize_text_edit(self, _text=""):
+        """Normalize the line edit currently being edited."""
+        widget = self.sender()
+        if not isinstance(widget, QtWidgets.QLineEdit):
+            return
+        cursor_position = widget.cursorPosition()
+        normalized = self.normalize_text(widget.text())
+        if normalized != widget.text():
+            widget.setText(normalized)
+            widget.setCursorPosition(cursor_position)
+
+    def save_settings(self, _text=""):
+        """Persist the last values entered in the save form."""
+        for name, widget in (
+            ("project", self.project_edit),
+            ("sequence", self.sequence_edit),
+            ("shot", self.shot_edit),
+            ("description", self.description_edit),
+            ("version", self.version_edit),
+        ):
+            self.settings.setValue(name, widget.text())
+
+    def eventFilter(self, watched, event):
+        """Handle version changes from the Up and Down arrow keys."""
+        if watched is self.version_edit and event.type() == QtCore.QEvent.Type.KeyPress:
+            if event.key() == QtCore.Qt.Key.Key_Up:
+                self.change_version(1)
+                return True
+            if event.key() == QtCore.Qt.Key.Key_Down:
+                self.change_version(-1)
+                return True
+        return super().eventFilter(watched, event)
+
+    def change_version(self, amount):
+        """Increment or decrement the major version while preserving formatting."""
+        version_text = self.version_edit.text().strip()
+        version_part, separator, minor_part = version_text.partition(".")
+        prefix = "v" if version_part.lower().startswith("v") else ""
+        digits = version_part[len(prefix) :] or "0"
+        try:
+            version = max(0, int(digits) + amount)
+        except ValueError:
+            return False
+
+        version_value = f"{version:0{len(digits)}d}"
+        new_text = f"{prefix}{version_value}"
+        if separator:
+            new_text += f".{minor_part}"
+        self.version_edit.setText(new_text)
+        return True
 
     def form_path(self):
         """Form the path from the UI elements.
@@ -70,29 +176,54 @@ class NSaveView(QtWidgets.QDialog):
         Returns:
             bool: True if successful.
         """
-        context = self.project_level_edit.text().split(".")
-        for key, value in zip(["project", "sequence", "shot"], context):
+        context = (
+            self.normalize_text(self.project_edit.text()),
+            self.normalize_text(self.sequence_edit.text()),
+            self.normalize_text(self.shot_edit.text()),
+        )
+        for key, value in zip(("show", "sequence", "shot"), context):
             setattr(self.scene_assembler, key, value)
 
         version = version_minor = 0
-        self.scene_assembler.description = self.description_edit.text()
+        self.scene_assembler.description = self.normalize_text(self.description_edit.text())
 
         # Check if the version is in 1.1 format
         version_text = self.version_edit.text()
-        if "." in version_text:
-            version_part, minor_part = version_text.split(".", 1)
-            version = int(version_part.replace("v", ""))
-            version_minor = int(minor_part)
-        else:
-            version = int(version_text.replace("v", "") or 1)
-            version_minor = 0
+        try:
+            if "." in version_text:
+                version_part, minor_part = version_text.split(".", 1)
+                version = int(version_part.replace("v", ""))
+                version_minor = int(minor_part)
+            else:
+                version = int(version_text.replace("v", "") or 1)
+                version_minor = 0
+        except ValueError:
+            self.preview_panel.clear()
+            return False
 
         self.scene_assembler.version = version
         self.scene_assembler.minor_version = version_minor
-        if self.description_edit.text() and self.project_level_edit.text():
+        if any(context):
             resolved_path = self.scene_assembler.resolve()
             self.preview_panel.setText(resolved_path)
+            self.refresh_script_tree(resolved_path)
+        else:
+            self.preview_panel.clear()
+            self.script_tree.setVisible(False)
         return True
+
+    def refresh_script_tree(self, resolved_path):
+        """Show existing Nuke scripts from the resolved script directory."""
+        directory = QtCore.QFileInfo(resolved_path).absolutePath()
+        if not QtCore.QDir(directory).exists():
+            self.script_tree.setVisible(False)
+            return
+
+        root_index = self.script_model.setRootPath(directory)
+        self.script_tree.setRootIndex(root_index)
+        for column, title in enumerate(("Script", "Size", "Type", "Modified")):
+            self.script_model.setHeaderData(column, QtCore.Qt.Orientation.Horizontal, title)
+        self.script_tree.setVisible(True)
 
     def save(self):
         """Save the current scene.
@@ -100,7 +231,6 @@ class NSaveView(QtWidgets.QDialog):
         Returns:
             bool: True if successful.
         """
-        resolved_path = self.scene_assembler.resolve()
         # Here you would add the Nuke specific save code
         self.close()
 
@@ -115,7 +245,7 @@ def load():
 
     view = NSaveView()
     view.show()
-    app.exec_()
+    app.exec()
     return view
 
 
@@ -127,7 +257,8 @@ def load_in_application():
     """
     view = NSaveView()
     view.show()
+    print("Loaded NSaveView in existing application.")
     return view
 
 
-load_in_application()
+load()

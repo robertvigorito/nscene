@@ -5,7 +5,7 @@ requires-python = ">=3.12"
 [[package]]
 name = "necessities"
 version = "0.1.0"
-source = { directory = "../necessities" }
+source = { editable = "../necessities" }
 
 [package.metadata]
 
@@ -38,7 +38,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "necessities", directory = "../necessities" },
+    { name = "necessities", editable = "../necessities" },
     { name = "pyside6", specifier = ">=6.10.1" },
     { name = "qt-py", specifier = ">=2.0.7" },
     { name = "qtpy", specifier = ">=2.4.3" },

@@ -50,3 +50,4 @@ def commands():
 
     env.PYTHONPATH.append(python_root)
     env.NUKE_PATH.append(nuke_menu_root)
+    env.PYTHONPATH.append("/home/robert-v/dev/wgid/nscene/src")

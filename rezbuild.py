@@ -9,15 +9,23 @@ from pathlib import Path
 def build() -> None:
     source_path = Path(os.environ["REZ_BUILD_SOURCE_PATH"]).resolve()
     install_enabled = os.environ.get("REZ_BUILD_INSTALL") == "1"
-
-    if not install_enabled:
-        # Rez may invoke a non-install build phase first; nothing to do here.
-        return
+    print(f"Install enabled: {install_enabled}")
 
     install_path = Path(os.environ["REZ_BUILD_INSTALL_PATH"]).resolve()
     target_path = install_path / "python"
     target_path.mkdir(parents=True, exist_ok=True)
-
+    if not install_enabled:
+        # symlink the source directory to the target path
+        if target_path.exists():
+            shutil.rmtree(target_path, ignore_errors=True)
+            target_path.unlink(missing_ok=True)
+        (target_path / source_path.name).parent.mkdir(parents=True, exist_ok=True)
+        (target_path / source_path.name).symlink_to(source_path / "src" / source_path.name)
+        print(f"Symlinked {source_path} to {target_path}")
+        return
+    
+    shutil.rmtree(target_path, ignore_errors=True)
+    target_path.unlink(missing_ok=True)
     cmd = [
         "uv",
         "pip",
@@ -27,6 +35,7 @@ def build() -> None:
         "--target",
         str(target_path),
     ]
+    print("install to", target_path)
     subprocess.run(cmd, cwd=source_path, check=True)
     # Copy nuke in the source directory to the target path
     nuke_source = source_path / "src/nuke"

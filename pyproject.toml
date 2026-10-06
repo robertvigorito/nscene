@@ -28,4 +28,4 @@ dev = [
 ]
 
 [tool.uv.sources]
-necessities = { path = "../necessities" }
+necessities = { path = "../necessities", editable = true }
