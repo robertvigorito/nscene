@@ -44,7 +44,7 @@ docs: ## generate Sphinx HTML documentation, including API docs
 	$(BROWSER) docs/_build/html/index.html
 
 lint: 
-	$(eval files=$(shell find ./ -type f -name "*.py"))
+	$(eval files=$(shell find ./src -type f -name "*.py"))
 	@isort --check-only --color  $(files) --profile black || echo "isort failed" 
 	@black --check $(files) || echo "black failed"
 	pylint --exit-zero $(files)

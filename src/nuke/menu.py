@@ -3,4 +3,6 @@
 import nuke
 
 
-nuke.menu("Nuke").addCommand("File/Save As", "import nscene.view as nv; view = nv.load_in_application()", "Ctrl+Shift+S")
+nuke.menu("Nuke").addCommand(
+    "File/Save As", "import nscene.save_as_interface as nv; view = nv.load_in_application()", "alt+shift+s"
+)
