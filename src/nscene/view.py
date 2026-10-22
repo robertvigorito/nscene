@@ -1,8 +1,37 @@
 """Build a Nuke save and open interface."""
 
-from Qt import QtWidgets
+import os
+from pathlib import Path
+
+from Qt import QtCore, QtWidgets
 
 from necessities import assemble
+
+
+def _context_suggestions(project_root):
+    """Return dot-separated project, sequence, and shot paths found under project_root."""
+    suggestions = set()
+    try:
+        projects = sorted(path for path in project_root.iterdir() if path.is_dir())
+    except OSError:
+        return []
+
+    for project in projects:
+        suggestions.add(project.name)
+        try:
+            sequences = sorted(path for path in project.iterdir() if path.is_dir())
+        except OSError:
+            continue
+
+        for sequence in sequences:
+            suggestions.add(f"{project.name}.{sequence.name}")
+            try:
+                shots = sorted(path for path in sequence.iterdir() if path.is_dir())
+            except OSError:
+                continue
+            suggestions.update(f"{project.name}.{sequence.name}.{shot.name}" for shot in shots)
+
+    return sorted(suggestions, key=str.casefold)
 
 
 class NSaveView(QtWidgets.QDialog):
@@ -25,6 +54,10 @@ class NSaveView(QtWidgets.QDialog):
 
         self.project_level_edit = QtWidgets.QLineEdit()
         self.project_level_edit.setPlaceholderText("Project Level, show, sequence and shot seperated by .")
+        project_root = Path(os.environ.get("NSCENE_PROJECT_ROOT", "/vfx/wgid/projects"))
+        completer = QtWidgets.QCompleter(_context_suggestions(project_root), self)
+        completer.setCaseSensitivity(QtCore.Qt.CaseSensitivity.CaseInsensitive)
+        self.project_level_edit.setCompleter(completer)
 
         # description layout
         self.description_edit = QtWidgets.QLineEdit()
@@ -70,7 +103,7 @@ class NSaveView(QtWidgets.QDialog):
         Returns:
             bool: True if successful.
         """
-        context = self.project_level_edit.text().split(".")
+        context = (self.project_level_edit.text().split(".") + ["", "", ""])[:3]
         for key, value in zip(["project", "sequence", "shot"], context):
             setattr(self.scene_assembler, key, value)
 
