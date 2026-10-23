@@ -1,6 +1,18 @@
 """Filesystem tree widget for previously saved Nuke scripts."""
 
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
+
+
+def _grayscale_pixmap(pixmap: QtGui.QPixmap) -> QtGui.QPixmap:
+    """Return a grayscale copy of a pixmap, retaining each pixel's alpha."""
+    image = pixmap.toImage().convertToFormat(QtGui.QImage.Format.Format_ARGB32)
+    for y in range(image.height()):
+        for x in range(image.width()):
+            color = image.pixelColor(x, y)
+            gray = round(0.299 * color.red() + 0.587 * color.green() + 0.114 * color.blue())
+            color.setRgb(gray, gray, gray, color.alpha())
+            image.setPixelColor(x, y, color)
+    return QtGui.QPixmap.fromImage(image)
 
 
 class ExistingScriptsTreeView(QtWidgets.QTreeView):
@@ -14,7 +26,8 @@ class ExistingScriptsTreeView(QtWidgets.QTreeView):
 
         self.file_model = QtWidgets.QFileSystemModel(self)
         self.file_model.setFilter(QtCore.QDir.Filter.Files | QtCore.QDir.Filter.NoDotAndDotDot)
-        self.file_model.setNameFilters(["*.nk"])
+        self._show_autosaves = False
+        self._update_name_filters()
         self.file_model.setNameFilterDisables(False)
         self.setModel(self.file_model)
         self.setRootIsDecorated(False)
@@ -34,6 +47,25 @@ class ExistingScriptsTreeView(QtWidgets.QTreeView):
         self.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
         # self.customContextMenuRequested.connect(self._show_context_menu)
         self.show()
+        self.setDragEnabled(True)
+
+    def set_show_autosaves(self, visible: bool) -> None:
+        """Include or exclude Nuke autosave files in the filesystem view."""
+        self._show_autosaves = visible
+        self._update_name_filters()
+
+    def _update_name_filters(self) -> None:
+        """Apply the script and optional autosave filename filters."""
+        filters = ["*.nk"]
+        if self._show_autosaves:
+            filters.append("*.nk.autosave")
+        self.file_model.setNameFilters(filters)
+
+    @staticmethod
+    def is_script_file(file_path: str) -> bool:
+        """Return whether a path is a Nuke script or its autosave file."""
+        file_info = QtCore.QFileInfo(file_path)
+        return file_info.suffix().lower() == "nk" or file_info.fileName().lower().endswith(".nk.autosave")
 
     def set_headers(self) -> None:
         """Set readable labels for the filesystem metadata columns.
@@ -61,6 +93,45 @@ class ExistingScriptsTreeView(QtWidgets.QTreeView):
         """Keep the tree visible with an empty root when no target path is available."""
         self.setRootIndex(QtCore.QModelIndex())
         self.show()
+
+    def startDrag(self, supported_actions: object) -> None:
+        """Drag selected Nuke scripts as local-file URLs for external applications."""
+        script_paths = []
+        for index in self.selectionModel().selectedRows(0):
+            path = self.file_model.filePath(index)
+            file_info = QtCore.QFileInfo(path)
+            if file_info.isFile() and file_info.suffix().lower() == "nk":
+                script_paths.append(path)
+        if not script_paths:
+            return
+
+        mime_data = QtCore.QMimeData()
+        mime_data.setUrls([QtCore.QUrl.fromLocalFile(path) for path in script_paths])
+        mime_data.setText("\n".join(script_paths))
+        drag = QtGui.QDrag(self)
+        drag.setMimeData(mime_data)
+        icon = QtGui.QIcon()
+        try:
+            import nuke
+
+            main_window = getattr(nuke, "mainWindow")()
+            if main_window is not None:
+                icon = main_window.windowIcon()
+        except (ImportError, AttributeError, RuntimeError):
+            pass
+
+        application = QtWidgets.QApplication.instance()
+        if icon.isNull() and application is not None:
+            icon = application.windowIcon()
+        if icon.isNull():
+            icon = QtWidgets.QFileIconProvider().icon(QtCore.QFileInfo(script_paths[0]))
+
+        drag_pixmap = icon.pixmap(QtCore.QSize(32, 32))
+        if not drag_pixmap.isNull():
+            drag_pixmap = _grayscale_pixmap(drag_pixmap)
+            drag.setPixmap(drag_pixmap)
+            drag.setHotSpot(QtCore.QPoint(drag_pixmap.width() // 2, drag_pixmap.height() // 2))
+        drag.exec(QtCore.Qt.DropAction.CopyAction)
 
     def _show_context_menu(self, position: QtCore.QPoint) -> None:
         """Offer deletion for the selected scripts when a row is right-clicked."""

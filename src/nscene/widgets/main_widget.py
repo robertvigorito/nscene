@@ -76,7 +76,9 @@ class NukeContextDialog(QtWidgets.QDialog):
         minor_version_edit: QtWidgets.QSpinBox
         preview_panel: QtWidgets.QLineEdit
         script_tree: ExistingScriptsTreeView
+        show_autosaves_checkbox: QtWidgets.QCheckBox
         save_button: QtWidgets.QPushButton
+        clear_script_button: QtWidgets.QPushButton
         cancel_button: QtWidgets.QPushButton
     """
 
@@ -101,12 +103,21 @@ class NukeContextDialog(QtWidgets.QDialog):
         form_layout = QtWidgets.QFormLayout()
         self.menu_bar = QtWidgets.QMenuBar(self)
         self.history_menu = self.menu_bar.addMenu("History")
+        self.options_menu = self.menu_bar.addMenu("Options")
+        self.show_autosaves_action = self.options_menu.addAction("Show Autosave Files")
+        self.show_autosaves_action.setCheckable(True)
+        self.paste_selected_action = self.options_menu.addAction("Paste Selected")
+        self.paste_selected_action.setEnabled(False)
         form_layout.addRow(self.menu_bar)
         form_layout.addRow(context_layout)
         description_layout = self.build_description_layout()
         self.description_container = QtWidgets.QWidget(self)
         self.description_container.setLayout(description_layout)
         form_layout.addRow(self.description_container)
+
+        self.show_autosaves_checkbox = QtWidgets.QCheckBox("Show Autosave Files")
+        self.show_autosaves_checkbox.toggled.connect(self.script_tree.set_show_autosaves)
+        form_layout.addRow(self.show_autosaves_checkbox)
 
         form_layout.addRow(self.script_tree)
 
@@ -183,6 +194,8 @@ class NukeContextDialog(QtWidgets.QDialog):
 
         self.save_button: QtWidgets.QPushButton = QtWidgets.QPushButton("Save")
         self.save_button.setIcon(self.style().standardIcon(QtWidgets.QStyle.StandardPixmap.SP_DialogSaveButton))
+        self.clear_script_button: QtWidgets.QPushButton = QtWidgets.QPushButton("Clear Script + Save As")
+        self.clear_script_button.setToolTip("Clear the current Nuke script, then save an empty script to this path.")
         self.cancel_button: QtWidgets.QPushButton = QtWidgets.QPushButton("Cancel")
         self.cancel_button.clicked.connect(self.close)
         self.cancel_button.setIcon(self.style().standardIcon(QtWidgets.QStyle.StandardPixmap.SP_DialogCancelButton))
@@ -194,6 +207,7 @@ class NukeContextDialog(QtWidgets.QDialog):
         post_layout.addWidget(self.preview_panel)
         button_layout = QtWidgets.QHBoxLayout()
         button_layout.addWidget(self.save_button)
+        button_layout.addWidget(self.clear_script_button)
         button_layout.addWidget(self.cancel_button)
         post_layout.addSpacing(30)
         post_layout.addLayout(button_layout)
@@ -224,6 +238,12 @@ class FormedNukeContextDialog:
         self.settings = QtCore.QSettings("nscene", "save-as")
         self.projects_root = projects_root or get_projects_root()
         self.restore_settings()
+        show_autosaves = self.settings.value("show_autosaves", False, type=bool)
+        self._base_widget.show_autosaves_action.setChecked(show_autosaves)
+        self._base_widget.script_tree.set_show_autosaves(show_autosaves)
+        self._base_widget.show_autosaves_action.toggled.connect(self._set_show_autosaves)
+        self._base_widget.script_tree.selectionModel().selectionChanged.connect(self._update_paste_action)
+        self._update_paste_action()
         self._install_completers()
         self._refresh_history_menu()
 
@@ -267,6 +287,23 @@ class FormedNukeContextDialog:
     def close(self) -> None:
         """Close the managed dialog."""
         self._base_widget.close()
+
+    def _set_show_autosaves(self, visible: bool) -> None:
+        """Update autosave visibility and persist the option."""
+        self._base_widget.script_tree.set_show_autosaves(visible)
+        self.settings.setValue("show_autosaves", visible)
+        self._update_paste_action()
+
+    def _update_paste_action(self, *_args: object) -> None:
+        """Enable Paste Selected when exactly one Nuke script is selected."""
+        selected_rows = self._base_widget.script_tree.selectionModel().selectedRows(0)
+        selected_scripts = [
+            row
+            for row in selected_rows
+            if self._base_widget.script_tree.file_model.fileInfo(row).isFile()
+            and ExistingScriptsTreeView.is_script_file(self._base_widget.script_tree.file_model.filePath(row))
+        ]
+        self._base_widget.paste_selected_action.setEnabled(len(selected_scripts) == 1)
 
     @staticmethod
     def _directory_names(path: str) -> list[str]:

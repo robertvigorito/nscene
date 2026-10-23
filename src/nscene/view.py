@@ -9,6 +9,7 @@ from nscene.interface import (
     load_in_application,
     open_in_application,
     save_in_application,
+    save_or_save_as_in_application,
 )
 
 __all__ = [
@@ -20,4 +21,5 @@ __all__ = [
     "load_in_application",
     "open_in_application",
     "save_in_application",
+    "save_or_save_as_in_application",
 ]

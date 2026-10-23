@@ -12,8 +12,15 @@ nuke.menu("Nuke").addCommand(
 
 nuke.menu("Nuke").addCommand(
     "File/WGID Save As",
-    "import nscene.interface as nscene_interface; nscene_interface.save_in_application()",
-    "ctrl+s",
+    "import nscene.interface as nscene_interface; nscene_interface.save_as_in_application()",
+    "ctrl+shift+s",
     "SaveAs.png",
     index=1,
+)
+nuke.menu("Nuke").addCommand(
+    "File/WGID Save Comp",
+    "import nscene.interface as nscene_interface; nscene_interface.save_or_save_as_in_application()",
+    "ctrl+s",
+    "Save.png",
+    index=2,
 )
