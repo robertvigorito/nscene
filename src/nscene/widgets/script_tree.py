@@ -49,6 +49,10 @@ class ExistingScriptsTreeView(QtWidgets.QTreeView):
     def set_save_path(self, save_path: str) -> None:
         """Display scripts beside the target save file, including an empty directory view."""
         directory = QtCore.QFileInfo(save_path).absolutePath()
+        self.set_directory(directory)
+
+    def set_directory(self, directory: str) -> None:
+        """Set the directory shown by the tree widget."""
         self.setRootIndex(self.file_model.setRootPath(directory))
         self.set_headers()
         self.show()

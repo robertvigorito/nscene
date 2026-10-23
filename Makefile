@@ -75,3 +75,11 @@ script:
 
 coverage: ## check code coverage quickly with the default Python
 	wslview ./htmlcov/index.html
+.PHONY: clean build clean-build clean-pyc clean-test docs docs-serve format lint check lint-check install poetry-install test test-all script coverage
+
+docs-serve: ## preview documentation with live reload
+	uv run mkdocs serve
+
+format: ## apply safe Ruff fixes and format Python files
+	ruff check --fix .
+	ruff format .

@@ -6,7 +6,7 @@ readme = "README.md"
 authors = [
     { name = "Rob", email = "robertvigorito@gmail.com" }
 ]
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 dependencies = [
     "necessities",
     "pyside6>=6.10.1",
@@ -27,6 +27,16 @@ dev = [
     "pylint>=4.1.2",
     "ruff>=0.14.10",
     "types-nuke>=13.2.8.0",
+    "isort>=5.13",
+    "mypy>=1.10",
+    "mkdocs>=1.6,<2",
+    "mkdocs-material>=9.6",
+    "mkdocstrings[python]>=0.27",
+    "pylint>=3.2",
+    "pytest>=8.0",
+    "ruff>=0.5",
+    "pytest-sugar>=1.0",
+    "pytest-cov>=6.0",
 ]
 
 [tool.uv.sources]
@@ -35,3 +45,28 @@ necessities = { path = "../necessities", editable = true }
 # Pylint line to 120
 [tool.pylint.'MESSAGES CONTROL']
 max-line-length = 120
+[tool.pylint.main]
+py-version = "3.10"
+
+[tool.pylint.format]
+max-line-length = 120
+
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-ra", "--cov=nscene", "--cov-report=term-missing"]
+
+[tool.isort]
+profile = "black"
+line_length = 120
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+

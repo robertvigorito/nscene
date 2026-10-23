@@ -1,8 +1,12 @@
 """Core save dialog widget assembled from reusable controls."""
 
 import dataclasses
-from Qt import QtWidgets, QtGui, QtCore
+import json
 
+from necessities import assemble
+from Qt import QtCore, QtGui, QtWidgets
+
+from nscene.paths import get_projects_root
 from nscene.widgets.script_tree import ExistingScriptsTreeView
 
 
@@ -95,9 +99,14 @@ class NukeContextDialog(QtWidgets.QDialog):
         context_layout = self.build_context_layout()
 
         form_layout = QtWidgets.QFormLayout()
+        self.menu_bar = QtWidgets.QMenuBar(self)
+        self.history_menu = self.menu_bar.addMenu("History")
+        form_layout.addRow(self.menu_bar)
         form_layout.addRow(context_layout)
         description_layout = self.build_description_layout()
-        form_layout.addRow(description_layout)
+        self.description_container = QtWidgets.QWidget(self)
+        self.description_container.setLayout(description_layout)
+        form_layout.addRow(self.description_container)
 
         form_layout.addRow(self.script_tree)
 
@@ -125,9 +134,11 @@ class NukeContextDialog(QtWidgets.QDialog):
         context_layout = QtWidgets.QHBoxLayout()
         context_layout.setSpacing(3)
         context_layout.addWidget(self.project_edit)
-        context_layout.addWidget(QtWidgets.QLabel("/"))
+        self.context_separator_one = QtWidgets.QLabel("/")
+        context_layout.addWidget(self.context_separator_one)
         context_layout.addWidget(self.sequence_edit)
-        context_layout.addWidget(QtWidgets.QLabel("/"))
+        self.context_separator_two = QtWidgets.QLabel("/")
+        context_layout.addWidget(self.context_separator_two)
         context_layout.addWidget(self.shot_edit)
         return context_layout
 
@@ -189,12 +200,39 @@ class NukeContextDialog(QtWidgets.QDialog):
 
         return post_layout
 
+    def set_context_fields_visible(self, visible: bool) -> None:
+        """Show or hide project, sequence, and shot fields, leaving history available."""
+        for widget in (
+            self.project_edit,
+            self.sequence_edit,
+            self.shot_edit,
+            self.context_separator_one,
+            self.context_separator_two,
+        ):
+            widget.setVisible(visible)
+
+    def set_save_fields_visible(self, visible: bool) -> None:
+        """Show or hide description and version controls used only when saving."""
+        self.description_container.setVisible(visible)
+
 
 class FormedNukeContextDialog:
-    def __init__(self, parent=None):
+    HISTORY_LIMIT = 20
+
+    def __init__(self, parent=None, projects_root=None, show=True):
         self._base_widget = NukeContextDialog(parent)
         self.settings = QtCore.QSettings("nscene", "save-as")
+        self.projects_root = projects_root or get_projects_root()
         self.restore_settings()
+        self._install_completers()
+        self._refresh_history_menu()
+
+        for field, widget in (
+            ("project", self._base_widget.project_edit),
+            ("sequence", self._base_widget.sequence_edit),
+            ("shot", self._base_widget.shot_edit),
+        ):
+            widget.textChanged.connect(lambda _text, changed=field: self._context_changed(changed))
 
         # Shortcut to access the base widget's attributes directly
         QtGui.QShortcut("alt+w", self._base_widget, self._base_widget.close)
@@ -210,11 +248,137 @@ class FormedNukeContextDialog:
             self._base_widget,
             lambda: self.version_up_widget(self._base_widget.minor_version_edit, step=-1),
         )
-        self._base_widget.show()
+        if show:
+            self._base_widget.show()
 
         # Save the settings on close and save
         self._base_widget.finished.connect(self.save_settings)
         self._base_widget.accepted.connect(self.save_settings)
+
+    @property
+    def base_widget(self) -> NukeContextDialog:
+        """Return the reusable Qt dialog managed by this controller."""
+        return self._base_widget
+
+    def show(self) -> None:
+        """Show the managed dialog."""
+        self._base_widget.show()
+
+    def close(self) -> None:
+        """Close the managed dialog."""
+        self._base_widget.close()
+
+    @staticmethod
+    def _directory_names(path: str) -> list[str]:
+        """List visible child directories at a path, returning an empty list if unavailable."""
+        directory = QtCore.QDir(path)
+        if not directory.exists():
+            return []
+        return directory.entryList(
+            filters=QtCore.QDir.Filter.Dirs | QtCore.QDir.Filter.NoDotAndDotDot,
+            sort=QtCore.QDir.SortFlag.Name,
+        )
+
+    def _install_completers(self) -> None:
+        """Attach popup completions sourced from the matching directory level on disk."""
+        widget = self._base_widget
+        self._completers = {}
+        for key, line_edit in (
+            ("project", widget.project_edit),
+            ("sequence", widget.sequence_edit),
+            ("shot", widget.shot_edit),
+        ):
+            completer = QtWidgets.QCompleter(line_edit)
+            completer.setCaseSensitivity(QtCore.Qt.CaseSensitivity.CaseInsensitive)
+            completer.setCompletionMode(QtWidgets.QCompleter.CompletionMode.PopupCompletion)
+            line_edit.setCompleter(completer)
+            self._completers[key] = completer
+        self._refresh_completions()
+
+    def _refresh_completions(self, *keys: str) -> None:
+        """Refresh completion lists from their matching parent directories."""
+        widget = self._base_widget
+        scene = assemble.Scene.from_application(
+            "nuke",
+            root=self.projects_root,
+            show=widget.project_edit.text(),
+            sequence=widget.sequence_edit.text(),
+            shot=widget.shot_edit.text(),
+        )
+        show_directory = QtCore.QDir(scene.root).filePath(scene.show) if scene.show else scene.root
+        sequence_directory = QtCore.QDir(show_directory).filePath(scene.sequence) if scene.sequence else show_directory
+        completion_sources = {
+            "project": scene.root,
+            "sequence": show_directory,
+            "shot": sequence_directory,
+        }
+        for key in keys or tuple(completion_sources):
+            source_path = completion_sources[key]
+            self._completers[key].setModel(
+                QtCore.QStringListModel(self._directory_names(source_path), self._completers[key])
+            )
+
+    def _context_changed(self, field: str) -> None:
+        """Refresh disk suggestions and persist complete contexts that exist on disk."""
+        if field == "project":
+            self._refresh_completions("sequence", "shot")
+        elif field == "sequence":
+            self._refresh_completions("shot")
+        self.save_settings()
+
+    def _read_history(self) -> list[tuple[str, str, str]]:
+        """Read recent project/sequence/shot contexts from settings."""
+        try:
+            values = json.loads(self.settings.value("context_history", "[]", type=str))
+        except (TypeError, ValueError):
+            return []
+        return [tuple(item) for item in values if isinstance(item, list) and len(item) == 3]
+
+    def _refresh_history_menu(self) -> None:
+        """Rebuild the menu of recently used contexts."""
+        menu = self._base_widget.history_menu
+        menu.clear()
+        history = self._read_history()
+        if not history:
+            action = menu.addAction("No recent contexts")
+            action.setEnabled(False)
+            return
+        for context in history:
+            action = menu.addAction(" / ".join(context))
+            action.setData(context)
+            action.triggered.connect(lambda _checked=False, selected=context: self._apply_history(selected))
+
+    def _record_context(self, settings: WidgetSettings) -> None:
+        """Remember a context only when the corresponding directory exists on disk."""
+        context = (settings.project, settings.sequence, settings.shot)
+        if not all(context):
+            return
+        context_path = QtCore.QDir(self.projects_root).filePath(context[0])
+        context_path = QtCore.QDir(context_path).filePath(context[1])
+        context_path = QtCore.QDir(context_path).filePath(context[2])
+        if not QtCore.QDir(context_path).exists():
+            return
+        history = [entry for entry in self._read_history() if entry != context]
+        history.insert(0, context)
+        self.settings.setValue(
+            "context_history",
+            json.dumps(history[: self.HISTORY_LIMIT]),
+        )
+        self._refresh_history_menu()
+
+    def _apply_history(self, context: tuple[str, str, str]) -> None:
+        """Navigate to a context selected from history."""
+        line_edits = (
+            self._base_widget.project_edit,
+            self._base_widget.sequence_edit,
+            self._base_widget.shot_edit,
+        )
+        blockers = [QtCore.QSignalBlocker(line_edit) for line_edit in line_edits]
+        for line_edit, value in zip(line_edits, context):
+            line_edit.setText(value)
+        del blockers
+        self._refresh_completions()
+        self.save_settings()
 
     def restore_settings(self) -> None:
         """Restore the previously entered save-form values."""
@@ -242,6 +406,7 @@ class FormedNukeContextDialog:
         widget_settings = self.get_settings()
         for name, value in widget_settings.as_dict().items():
             self.settings.setValue(name, value)
+        self._record_context(widget_settings)
         return True
 
     def refresh(self): ...

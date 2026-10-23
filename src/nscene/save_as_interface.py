@@ -2,21 +2,36 @@
 
 import sys
 
-# 3rd party imports
-from Qt import QtCore, QtGui, QtWidgets
 from necessities import assemble as _assemble
 
+# 3rd party imports
+from Qt import QtCore, QtWidgets
+
 # Package imports
+from nscene.paths import get_projects_root
 from nscene.widgets.main_widget import FormedNukeContextDialog as _FormedNukeContextDialog
-from nscene.widgets.script_tree import ExistingScriptsTreeView
 
 
 class NukeSaveAsInterface:
     """Control the application behavior for a standalone base dialog."""
 
     def __init__(self, parent=None):
-        self._base_widget = _FormedNukeContextDialog(parent)
-        self.scene_assembler = _assemble.Scene.from_application("nuke", root="/vfx/wgid/projects")
+        projects_root = get_projects_root()
+        self._base_widget = _FormedNukeContextDialog(parent, projects_root=projects_root)
+        self.scene_assembler = _assemble.Scene.from_application("nuke", root=projects_root)
+
+    @property
+    def base_widget(self):
+        """Return the shared save dialog."""
+        return self._base_widget.base_widget
+
+    def show(self):
+        """Show the save dialog."""
+        self._base_widget.show()
+
+    def close(self):
+        """Close the save dialog."""
+        self._base_widget.close()
 
     def save(self) -> bool:
         """Save the current scene in the host application."""
@@ -32,6 +47,7 @@ class NukeSaveAsInterface:
         # Use touch to create an empty file if it doesn't exist.
         file_path = preview_path
         nuke.scriptSaveAs(file_path)
+        self.close()
 
         return True
 
@@ -50,4 +66,5 @@ def load_in_application():
     return view
 
 
-load()
+NSaveInterface = NukeSaveAsInterface
+NSaveView = NukeSaveAsInterface
