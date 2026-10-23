@@ -53,7 +53,7 @@ class NukeSaveAsInterface:
         """
         settings = self._base_widget.get_settings()
         widget = self._base_widget.base_widget
-        if not all((settings.project, settings.sequence, settings.shot, settings.description)):
+        if not all((settings.project, settings.description)):
             self._base_widget.set_preview_path("")
             widget.save_button.setEnabled(False)
             return False
@@ -66,7 +66,7 @@ class NukeSaveAsInterface:
             version=settings.version,
             minor_version=settings.minor_version,
         )
-        preview_path = normalize_platform_path(scene.resolve())
+        preview_path = normalize_platform_path(QtCore.QDir.cleanPath(scene.resolve()))
         self._base_widget.set_preview_path(preview_path)
         widget.script_tree.set_save_path(preview_path)
         widget.save_button.setEnabled(True)

@@ -76,7 +76,6 @@ class NukeContextDialog(QtWidgets.QDialog):
         minor_version_edit: QtWidgets.QSpinBox
         preview_panel: QtWidgets.QLineEdit
         script_tree: ExistingScriptsTreeView
-        show_autosaves_checkbox: QtWidgets.QCheckBox
         save_button: QtWidgets.QPushButton
         clear_script_button: QtWidgets.QPushButton
         cancel_button: QtWidgets.QPushButton
@@ -114,10 +113,6 @@ class NukeContextDialog(QtWidgets.QDialog):
         self.description_container = QtWidgets.QWidget(self)
         self.description_container.setLayout(description_layout)
         form_layout.addRow(self.description_container)
-
-        self.show_autosaves_checkbox = QtWidgets.QCheckBox("Show Autosave Files")
-        self.show_autosaves_checkbox.toggled.connect(self.script_tree.set_show_autosaves)
-        form_layout.addRow(self.show_autosaves_checkbox)
 
         form_layout.addRow(self.script_tree)
 
@@ -292,6 +287,7 @@ class FormedNukeContextDialog:
         """Update autosave visibility and persist the option."""
         self._base_widget.script_tree.set_show_autosaves(visible)
         self.settings.setValue("show_autosaves", visible)
+        self.settings.sync()
         self._update_paste_action()
 
     def _update_paste_action(self, *_args: object) -> None:
@@ -369,7 +365,16 @@ class FormedNukeContextDialog:
             values = json.loads(self.settings.value("context_history", "[]", type=str))
         except (TypeError, ValueError):
             return []
-        return [tuple(item) for item in values if isinstance(item, list) and len(item) == 3]
+        if not isinstance(values, list):
+            return []
+        history: list[tuple[str, str, str]] = []
+        for item in values:
+            if not isinstance(item, list) or len(item) != 3 or not all(isinstance(part, str) for part in item):
+                continue
+            context = (item[0].strip(), item[1].strip(), item[2].strip())
+            if any(context) and context not in history:
+                history.append(context)
+        return history
 
     def _refresh_history_menu(self) -> None:
         """Rebuild the menu of recently used contexts."""
@@ -386,22 +391,71 @@ class FormedNukeContextDialog:
             action.triggered.connect(lambda _checked=False, selected=context: self._apply_history(selected))
 
     def _record_context(self, settings: WidgetSettings) -> None:
-        """Remember a context only when the corresponding directory exists on disk."""
-        context = (settings.project, settings.sequence, settings.shot)
-        if not all(context):
+        """Remember a non-empty context prefix when its directory exists on disk."""
+        context = (settings.project.strip(), settings.sequence.strip(), settings.shot.strip())
+        if not any(context):
             return
-        context_path = QtCore.QDir(self.projects_root).filePath(context[0])
-        context_path = QtCore.QDir(context_path).filePath(context[1])
-        context_path = QtCore.QDir(context_path).filePath(context[2])
+
+        context_path = self.projects_root
+        for part in context:
+            if not part:
+                break
+            context_path = QtCore.QDir(context_path).filePath(part)
         if not QtCore.QDir(context_path).exists():
             return
-        history = [entry for entry in self._read_history() if entry != context]
-        history.insert(0, context)
+
+        self.record_context(context)
+
+    def record_context(self, context: tuple[str, str, str]) -> bool:
+        """Add a context to recent history, moving duplicates to the front.
+
+        Args:
+            context: Project, sequence, and shot values; trailing levels may be empty.
+
+        Returns:
+            True when a non-empty context was recorded, otherwise False.
+        """
+        if len(context) != 3:
+            return False
+        normalized_context = (context[0].strip(), context[1].strip(), context[2].strip())
+        if not any(normalized_context):
+            return False
+
+        history = [entry for entry in self._read_history() if entry != normalized_context]
+        history.insert(0, normalized_context)
         self.settings.setValue(
             "context_history",
             json.dumps(history[: self.HISTORY_LIMIT]),
         )
+        self.settings.sync()
         self._refresh_history_menu()
+        return True
+
+    def record_script_context(self, file_path: str) -> bool:
+        """Infer and record project/sequence/shot context from a script path.
+
+        Args:
+            file_path: Script path beneath the configured projects root.
+
+        Returns:
+            True when a project context could be inferred and recorded, otherwise False.
+        """
+        relative_path = QtCore.QDir(self.projects_root).relativeFilePath(QtCore.QFileInfo(file_path).absoluteFilePath())
+        if relative_path == ".." or relative_path.startswith(f"..{QtCore.QDir.separator()}"):
+            return False
+
+        path_parts = [part for part in relative_path.split(QtCore.QDir.separator()) if part]
+        if not path_parts:
+            return False
+        if "nuke" in (part.lower() for part in path_parts):
+            nuke_directory_index = next(index for index, part in enumerate(path_parts) if part.lower() == "nuke")
+            path_parts = path_parts[:nuke_directory_index]
+        context = (
+            path_parts[0] if len(path_parts) > 0 else "",
+            path_parts[1] if len(path_parts) > 1 else "",
+            path_parts[2] if len(path_parts) > 2 else "",
+        )
+        return self.record_context(context)
 
     def _apply_history(self, context: tuple[str, str, str]) -> None:
         """Navigate to a context selected from history."""

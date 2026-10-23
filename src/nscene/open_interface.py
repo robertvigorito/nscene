@@ -270,6 +270,15 @@ class NukeOpenInterface:
                 f"Could not open the Nuke script:\n{error}",
             )
             return False
+        context = (
+            self._base_widget.project_edit.text(),
+            self._base_widget.sequence_edit.text(),
+            self._base_widget.shot_edit.text(),
+        )
+        if any(context):
+            self._form.record_context(context)
+        else:
+            self._form.record_script_context(file_path)
         self._base_widget.accept()
         return True
 
