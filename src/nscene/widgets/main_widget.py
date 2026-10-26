@@ -81,6 +81,8 @@ class NukeContextDialog(QtWidgets.QDialog):
         cancel_button: QtWidgets.QPushButton
     """
 
+    contextChanged = QtCore.Signal()
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.resize(1000, 650)
@@ -470,6 +472,7 @@ class FormedNukeContextDialog:
         del blockers
         self._refresh_completions()
         self.save_settings()
+        self._base_widget.contextChanged.emit()
 
     def restore_settings(self) -> None:
         """Restore the previously entered save-form values."""

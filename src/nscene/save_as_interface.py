@@ -20,6 +20,7 @@ class NukeSaveAsInterface:
         self._base_widget = _FormedNukeContextDialog(parent, projects_root=projects_root)
         self.scene_assembler = _assemble.Scene.from_application("nuke", root=projects_root)
         widget = self._base_widget.base_widget
+        widget.setWindowFlag(QtCore.Qt.WindowType.WindowStaysOnTopHint, True)
         for field in (widget.project_edit, widget.sequence_edit, widget.shot_edit, widget.description_edit):
             field.textChanged.connect(self._update_preview)
         widget.version_edit.valueChanged.connect(self._update_preview)
@@ -28,6 +29,7 @@ class NukeSaveAsInterface:
         widget.clear_script_button.clicked.connect(lambda _checked=False: self.clear_script_and_save_as())
         widget.paste_selected_action.triggered.connect(lambda _checked=False: self.paste_selected_script())
         self._update_preview()
+        widget.show()
 
     @property
     def base_widget(self):

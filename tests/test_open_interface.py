@@ -32,6 +32,25 @@ def test_context_navigation(qapp, monkeypatch, tmp_path):
     view.close()
 
 
+def test_open_dialog_is_always_on_top(qapp, monkeypatch, tmp_path):
+    """Keep the Open dialog above Nuke's main window."""
+    view = make_open_interface(monkeypatch, tmp_path)
+    assert view._base_widget.windowFlags() & QtCore.Qt.WindowType.WindowStaysOnTopHint
+    view.close()
+
+
+def test_history_selection_refreshes_tree_root(qapp, monkeypatch, tmp_path):
+    """Update the Open tree when a saved context is applied from History."""
+    target = tmp_path / "show" / "seq"
+    target.mkdir(parents=True)
+    view = make_open_interface(monkeypatch, tmp_path)
+    view._form._apply_history(("show", "seq", ""))
+    assert view._base_widget.project_edit.text() == "show"
+    assert view._base_widget.sequence_edit.text() == "seq"
+    assert view._base_widget.script_tree.file_model.rootPath() == str(target)
+    view.close()
+
+
 def test_select_and_open_script_records_partial_context(qapp, monkeypatch, tmp_path, fake_nuke):
     """Open a selected script and record entered partial context before accepting the dialog."""
     view = make_open_interface(monkeypatch, tmp_path)

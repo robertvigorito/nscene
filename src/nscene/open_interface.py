@@ -51,6 +51,7 @@ class NukeOpenInterface:
     def __init__(self, parent=None):
         self._form = FormedNukeContextDialog(parent, projects_root=get_projects_root(), show=False)
         self._base_widget = self._form.base_widget
+        self._base_widget.setWindowFlag(QtCore.Qt.WindowType.WindowStaysOnTopHint, True)
         self._base_widget.setWindowTitle("Open Nuke Scene")
         self._base_widget.preview_panel.setPlaceholderText("Select a scene to open")
         self._base_widget.save_button.setText("Open")
@@ -76,6 +77,7 @@ class NukeOpenInterface:
             self._base_widget.shot_edit,
         ):
             context_edit.textChanged.connect(self._refresh_script_directory)
+        self._base_widget.contextChanged.connect(self._refresh_script_directory)
         self._base_widget.script_tree.clicked.connect(self._select_script)
         self._base_widget.script_tree.doubleClicked.connect(self.open_selected_script)
         self._base_widget.script_tree.customContextMenuRequested.connect(self._show_script_context_menu)

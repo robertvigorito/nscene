@@ -1,6 +1,6 @@
 """Tests for Save As behavior with mocked Nuke APIs."""
 
-from Qt import QtWidgets
+from Qt import QtCore, QtWidgets
 
 from nscene import save_as_interface
 
@@ -55,6 +55,7 @@ def test_preview_requires_project_and_description_only(qapp, monkeypatch, tmp_pa
     assert not interface._update_preview()
     fill_save_fields(interface, project="show", description="")
     assert not interface._update_preview()
+    assert interface.base_widget.windowFlags() & QtCore.Qt.WindowType.WindowStaysOnTopHint
     interface.close()
 
 
