@@ -1,7 +1,7 @@
 [project]
 name = "nscene"
-version = "0.2.0b1"
-description = "Add your description here"
+version = "0.2.1"
+description = "Nuke save as and open with path management."
 readme = "README.md"
 authors = [
     { name = "Rob", email = "robertvigorito@gmail.com" }
@@ -11,7 +11,6 @@ dependencies = [
     "necessities",
     "pyside6>=6.10.1",
     "qt-py>=2.0.7",
-    "qtpy>=2.4.3",
 ]
 
 [project.scripts]

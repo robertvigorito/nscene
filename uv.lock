@@ -993,7 +993,7 @@ dev = [
 
 [[package]]
 name = "nscene"
-version = "0.2.0b1"
+version = "0.2.1"
 source = { editable = "." }
 dependencies = [
     { name = "necessities" },
